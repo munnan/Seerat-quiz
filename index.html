@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Alburhan Seerat Quiz Generator</title>
+    <title>Google Sheet Quiz Generator</title>
     <!-- Tailwind CSS CDN for easy styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- CRITICAL: html2canvas for Image Generation capability -->
@@ -155,7 +155,7 @@
                 <div class="sm:col-span-1 flex flex-col">
                     <label class="block text-sm font-medium text-gray-700 mb-2">موضوعات منتخب کریں:</label>
                     
-                    <!-- NEW: Check All/Uncheck All Buttons -->
+                    <!-- Check All/Uncheck All Buttons -->
                     <div class="flex gap-2 mb-2">
                         <button id="checkAllTopicsBtn" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white text-sm font-bold py-1 px-2 rounded-md transition duration-150">
                             سب کو منتخب کریں
@@ -174,23 +174,24 @@
                 <!-- Column 2: Other Filters (Difficulty, Answer Mode, Count) -->
                 <div class="sm:col-span-1 flex flex-col gap-6">
                     
-                    <!-- 1. Difficulty Filter -->
+                    <!-- 1. Difficulty Filter (UPDATED: Added "All Levels" as default) -->
                     <div class="filter-control-box">
                         <label for="difficultyLevel" class="block text-sm font-medium text-gray-700 mb-2">مشکل کی سطح کے لحاظ سے فلٹر کریں:</label>
                         <select id="difficultyLevel" class="py-2 pl-3 pr-8 text-base border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 rounded-md shadow-sm w-full">
+                            <option value="0-10" selected>تمام سطحیں</option>
                             <option value="0-3">آسان</option>
-                            <option value="4-6" selected>نارمل</option>
+                            <option value="4-6">نارمل</option>
                             <option value="7-8">مشکل</option>
                             <option value="9-10">انتہائی مشکل</option>
                         </select>
                     </div>
 
-                    <!-- 2. Answer Display Mode -->
+                    <!-- 2. Answer Display Mode (UPDATED: Default changed to all_shuffled_marked) -->
                     <div class="filter-control-box"> 
                         <label for="answerDisplayMode" class="block text-sm font-medium text-gray-700 mb-2">جواب دکھانے کا طریقہ:</label>
                         <select id="answerDisplayMode" class="block w-full py-2 pl-3 pr-8 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md shadow-sm">
                             <option value="all_shuffled_unmarked">تینوں جوابات دکھائیں (ترتیب بدل کر، جوابات غیر نشان زد)</option>
-                            <option value="all_shuffled_marked">تینوں جوابات دکھائیں (صحیح جواب کے ساتھ نشان زد)</option>
+                            <option value="all_shuffled_marked" selected>تینوں جوابات دکھائیں (صحیح جواب کے ساتھ نشان زد)</option>
                             <option value="right_only">صرف صحیح جواب دکھائیں</option>
                         </select>
                     </div>
@@ -273,7 +274,7 @@
         const difficultyLevelSelect = document.getElementById('difficultyLevel'); 
         const resetFiltersBtn = document.getElementById('resetFiltersBtn'); 
         
-        // NEW: Topic Selection Control Buttons
+        // Topic Selection Control Buttons
         const checkAllTopicsBtn = document.getElementById('checkAllTopicsBtn');
         const uncheckAllTopicsBtn = document.getElementById('uncheckAllTopicsBtn');
         
@@ -347,6 +348,7 @@
 
             const data = [];
             for (let i = 1; i < lines.length; i++) {
+                // This regex handles quoted fields containing commas
                 const values = lines[i].match(/(?:[^\,"]|"(?:\\.|[^"])*")+/g) || [];
                 const cleanedValues = values.map(value => value.trim().replace(/^"(.*)"$/, '$1'));
 
@@ -445,7 +447,11 @@
             }
 
             // 2. Get Difficulty Filters
-            const difficultyRange = difficultyLevelSelect.value.split('-'); 
+            const difficultyValue = difficultyLevelSelect.value;
+            // '0-10' is the 'All Levels' option
+            const isFilteringByDifficulty = difficultyValue !== '0-10';
+            
+            const difficultyRange = difficultyValue.split('-'); 
             const minDifficulty = parseInt(difficultyRange[0] || 0, 10);
             const maxDifficulty = parseInt(difficultyRange[1] || 10, 10);
 
@@ -458,13 +464,18 @@
                 if (!topicMatch) return false;
 
                 // Difficulty Filter: Check against Difficulty Level (Index 6)
-                // Use default 0 if the difficulty column is empty or invalid
-                const questionDifficulty = parseInt(row[COL_INDEX.DIFFICULTY] || 0, 10);
+                // If 'All Levels' is selected, this condition is always true, so we only run if a specific range is chosen.
+                if (isFilteringByDifficulty) {
+                    // Use default 0 if the difficulty column is empty or invalid
+                    const questionDifficulty = parseInt(row[COL_INDEX.DIFFICULTY] || 0, 10);
+                    
+                    // Only keep questions where difficulty is within the selected range (inclusive)
+                    const difficultyMatch = (questionDifficulty >= minDifficulty && questionDifficulty <= maxDifficulty);
+                    
+                    return difficultyMatch;
+                }
                 
-                // Only keep questions where difficulty is within the selected range (inclusive)
-                const difficultyMatch = (questionDifficulty >= minDifficulty && questionDifficulty <= maxDifficulty);
-                
-                return difficultyMatch;
+                return true; // If 'All Levels' (0-10) is selected, always pass the difficulty filter
             });
 
             return filtered;
@@ -503,14 +514,14 @@
             // 1. Uncheck all topic checkboxes
             setAllTopicsChecked(false); 
 
-            // 2. Reset Difficulty Level to default (Normal: 4-6)
-            difficultyLevelSelect.value = '4-6';
+            // 2. Reset Difficulty Level to default (All Levels: 0-10)
+            difficultyLevelSelect.value = '0-10';
 
             // 3. Reset Number of Questions to default (e.g., 5)
             numQuestionsInput.value = 5;
 
-            // 4. Reset Answer Display Mode to default (all_shuffled_unmarked)
-            answerDisplayModeSelect.value = 'all_shuffled_unmarked';
+            // 4. Reset Answer Display Mode to default (all_shuffled_marked)
+            answerDisplayModeSelect.value = 'all_shuffled_marked';
 
             // 5. Clear generated results (questions and messages)
             quizOutput.innerHTML = '';
@@ -525,7 +536,7 @@
         function shuffleArray(array) {
             for (let i = array.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
-                [array[i], array[j]] = [array[i], array[j]];
+                [array[i], array[j]] = [array[j], array[i]];
             }
             return array;
         }
@@ -579,18 +590,24 @@
                 let answers = [];
 
                 if (displayMode === 'right_only') {
+                    // Only include the right answer
                     answers = [rightAnswer].filter(a => a !== 'N/A' && a !== '');
                 } else {
+                    // Include all three answers
                     answers = [rightAnswer, wrongAnswer1, wrongAnswer2].filter(a => a !== 'N/A' && a !== '');
-                    shuffleArray(answers);
+                    
+                    // CRITICAL FIX: Shuffle the answers array to randomize the order
+                    shuffleArray(answers); 
                 }
 
 
                 let answersHtml = '';
+                // The answers array is now guaranteed to be shuffled if displayMode is not 'right_only'
                 answers.forEach(answer => {
                     let displayClass = '';
                     let rightAnswerLabel = '';
                     
+                    // Check if the current answer matches the correct one AND if the mode requires marking it
                     if (answer === rightAnswer && (displayMode === 'right_only' || displayMode === 'all_shuffled_marked')) {
                         displayClass = 'correct-answer';
                         rightAnswerLabel = ' (صحیح جواب)';
@@ -639,6 +656,27 @@
             clonedResults.classList.add('image-export-mode');
             clonedResults.querySelector('.flex')?.remove(); 
             
+            // Add a summary of applied filters to the export
+            const currentDifficultyOption = difficultyLevelSelect.options[difficultyLevelSelect.selectedIndex].text;
+            const currentAnswerModeOption = answerDisplayModeSelect.options[answerDisplayModeSelect.selectedIndex].text;
+            const currentQuestionCount = numQuestionsInput.value;
+            
+            const selectedTopicCheckboxes = document.querySelectorAll('#topicCheckboxes input[name="topic"]:checked');
+            const selectedTopicsText = Array.from(selectedTopicCheckboxes).map(checkbox => checkbox.value).join(', ');
+
+            const summaryHtml = `
+                <div style="border: 1px solid #e0e0e0; padding: 15px; margin-bottom: 20px; border-radius: 8px; background-color: #f7f7f7; text-align: right;">
+                    <p style="font-weight: bold; font-size: 18px; margin-bottom: 10px; color: #333;">اختیارات کا خلاصہ:</p>
+                    <p><strong>منتخب کردہ موضوعات (سیریل نمبر):</strong> ${selectedTopicsText || 'کوئی منتخب نہیں'}</p>
+                    <p><strong>سوالات کی تعداد:</strong> ${currentQuestionCount}</p>
+                    <p><strong>مشکل کی سطح:</strong> ${currentDifficultyOption}</p>
+                    <p><strong>جواب دکھانے کا طریقہ:</strong> ${currentAnswerModeOption}</p>
+                </div>
+            `;
+            const summaryDiv = document.createElement('div');
+            summaryDiv.innerHTML = summaryHtml;
+
+
             const exportHeader = document.createElement('div');
             exportHeader.className = 'export-logo-style text-center mb-6';
             
@@ -650,12 +688,13 @@
 
             const headerTitle = document.createElement('h1');
             headerTitle.className = 'text-3xl font-extrabold text-gray-900 mt-2';
-            headerTitle.textContent = 'البرہان سیرت کوئز';
+            headerTitle.textContent = 'البرہان سیرت کوئز رپورٹ';
             
             exportHeader.appendChild(headerLogo);
             exportHeader.appendChild(headerTitle);
 
             imageContainer.appendChild(exportHeader);
+            imageContainer.appendChild(summaryDiv); // Add summary before questions
             imageContainer.appendChild(clonedResults);
             
             document.body.appendChild(imageContainer);
@@ -768,4 +807,3 @@
     </script>
 </body>
 </html>
-
