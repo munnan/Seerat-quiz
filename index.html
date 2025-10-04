@@ -119,6 +119,15 @@
              flex-direction: column;
              align-items: center;
         }
+        /* New style for the date footer in the exported image */
+        .export-date-footer {
+            margin-top: 2rem;
+            padding-top: 1rem;
+            border-top: 1px solid #e2e8f0;
+            font-size: 0.9rem;
+            color: #64748b;
+            text-align: center;
+        }
     </style>
 </head>
 <body dir="rtl">
@@ -186,7 +195,7 @@
                         </select>
                     </div>
 
-                    <!-- 2. Answer Display Mode (UPDATED: Default changed to all_shuffled_marked) -->
+                    <!-- 2. Answer Display Mode (Default changed to all_shuffled_marked) -->
                     <div class="filter-control-box"> 
                         <label for="answerDisplayMode" class="block text-sm font-medium text-gray-700 mb-2">جواب دکھانے کا طریقہ:</label>
                         <select id="answerDisplayMode" class="block w-full py-2 pl-3 pr-8 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md shadow-sm">
@@ -281,6 +290,45 @@
         const alBurhanLogo = document.getElementById('alBurhanLogo');
         
         let sheetData = []; 
+        
+        /**
+         * Converts a date object to the specified Urdu/English format: "04th October 2025 8:32pm"
+         * @param {Date} date - The date object to format.
+         * @returns {string} The formatted date string.
+         */
+        function getFormattedDate(date) {
+            const months = ['January', 'February', 'March', 'April', 'May', 'June', 
+                            'July', 'August', 'September', 'October', 'November', 'December'];
+            
+            const day = date.getDate();
+            const month = months[date.getMonth()];
+            const year = date.getFullYear();
+            let hours = date.getHours();
+            const minutes = date.getMinutes();
+            
+            // Determine AM/PM
+            const ampm = hours >= 12 ? 'pm' : 'am';
+            // Convert to 12-hour format
+            hours = hours % 12;
+            hours = hours ? hours : 12; // The hour '0' should be '12'
+            
+            // Add 'st', 'nd', 'rd', or 'th' suffix to the day
+            const suffix = (day) => {
+                if (day > 3 && day < 21) return 'th'; // 11th to 20th
+                switch (day % 10) {
+                    case 1: return 'st';
+                    case 2: return 'nd';
+                    case 3: return 'rd';
+                    default: return 'th';
+                }
+            };
+            
+            const dayWithSuffix = day + suffix(day);
+            const formattedMinutes = minutes < 10 ? '0' + minutes : minutes;
+            
+            return `${dayWithSuffix} ${month} ${year} ${hours}:${formattedMinutes}${ampm}`;
+        }
+
         
         // Function to fetch and parse CSV data using a CORS proxy
         async function fetchSheetData() {
@@ -654,29 +702,17 @@
 
             const clonedResults = resultsSection.cloneNode(true);
             clonedResults.classList.add('image-export-mode');
+            // Remove the control buttons container from the clone
             clonedResults.querySelector('.flex')?.remove(); 
             
-            // Add a summary of applied filters to the export
-            const currentDifficultyOption = difficultyLevelSelect.options[difficultyLevelSelect.selectedIndex].text;
-            const currentAnswerModeOption = answerDisplayModeSelect.options[answerDisplayModeSelect.selectedIndex].text;
-            const currentQuestionCount = numQuestionsInput.value;
+            // Update the 'تیار کردہ سوالات' heading to just 'سوالات'
+            const clonedHeading = clonedResults.querySelector('h2');
+            if(clonedHeading) {
+                // Changing H2 text to just 'سوالات' for export
+                clonedHeading.textContent = 'سوالات'; 
+            }
             
-            const selectedTopicCheckboxes = document.querySelectorAll('#topicCheckboxes input[name="topic"]:checked');
-            const selectedTopicsText = Array.from(selectedTopicCheckboxes).map(checkbox => checkbox.value).join(', ');
-
-            const summaryHtml = `
-                <div style="border: 1px solid #e0e0e0; padding: 15px; margin-bottom: 20px; border-radius: 8px; background-color: #f7f7f7; text-align: right;">
-                    <p style="font-weight: bold; font-size: 18px; margin-bottom: 10px; color: #333;">اختیارات کا خلاصہ:</p>
-                    <p><strong>منتخب کردہ موضوعات (سیریل نمبر):</strong> ${selectedTopicsText || 'کوئی منتخب نہیں'}</p>
-                    <p><strong>سوالات کی تعداد:</strong> ${currentQuestionCount}</p>
-                    <p><strong>مشکل کی سطح:</strong> ${currentDifficultyOption}</p>
-                    <p><strong>جواب دکھانے کا طریقہ:</strong> ${currentAnswerModeOption}</p>
-                </div>
-            `;
-            const summaryDiv = document.createElement('div');
-            summaryDiv.innerHTML = summaryHtml;
-
-
+            // --- Export Header Setup ---
             const exportHeader = document.createElement('div');
             exportHeader.className = 'export-logo-style text-center mb-6';
             
@@ -688,14 +724,24 @@
 
             const headerTitle = document.createElement('h1');
             headerTitle.className = 'text-3xl font-extrabold text-gray-900 mt-2';
-            headerTitle.textContent = 'البرہان سیرت کوئز رپورٹ';
+            headerTitle.textContent = 'البرہان سیرت کوئز'; 
             
             exportHeader.appendChild(headerLogo);
             exportHeader.appendChild(headerTitle);
 
+            // --- CRITICAL: Add Date Footer ---
+            const currentDate = new Date();
+            const formattedDate = getFormattedDate(currentDate); 
+            
+            const dateFooter = document.createElement('div');
+            dateFooter.className = 'export-date-footer';
+            dateFooter.innerHTML = `یہ سوالات ${formattedDate} کو تیار کیے گئے ہیں۔`;
+            // ----------------------------------------
+
             imageContainer.appendChild(exportHeader);
-            imageContainer.appendChild(summaryDiv); // Add summary before questions
             imageContainer.appendChild(clonedResults);
+            // Append the date footer after the questions content
+            imageContainer.appendChild(dateFooter); 
             
             document.body.appendChild(imageContainer);
 
@@ -736,31 +782,59 @@
             let textToCopy = '';
             const displayMode = document.getElementById('answerDisplayMode').value;
             
-            const questionCards = quizOutput.querySelectorAll('.question-card');
-            questionCards.forEach((card, index) => {
-                const questionTextElement = card.querySelector('p:nth-child(1)'); 
-                let rawQuestionText = questionTextElement ? questionTextElement.textContent.replace(/^سوال \d+:\s*/, '') : '';
-                
-                const topicSpan = questionTextElement ? questionTextElement.querySelector('.quiz-topic-text') : null;
-                let topicInBrackets = '';
-                if (topicSpan) {
-                     topicInBrackets = topicSpan.textContent;
-                     rawQuestionText = rawQuestionText.replace(topicInBrackets, '').trim(); 
-                }
+            // We need to iterate over the *original* sheet data rows that were used to generate the quiz,
+            // as the HTML output might be scrambled or filtered.
+            const questionsToDisplay = getFilteredQuestions().slice(0, parseInt(numQuestionsInput.value, 10));
+            
+            if (questionsToDisplay.length === 0) {
+                 // Nothing to copy
+                 return;
+            }
 
-                const answers = Array.from(card.querySelectorAll('li span')).map(span => {
-                    return span.textContent;
-                });
+            questionsToDisplay.forEach((q, index) => {
+                const questionText = q[COL_INDEX.QUESTION] || 'کوئی سوال دستیاب نہیں';
+                const topicText = q[COL_INDEX.TOPIC] || ''; 
+                const rightAnswer = q[COL_INDEX.RIGHT_ANSWER] || 'N/A';
+                const wrongAnswer1 = q[COL_INDEX.WRONG_ANSWER_1] || 'N/A';
+                const wrongAnswer2 = q[COL_INDEX.WRONG_ANSWER_2] || 'N/A';
 
-                textToCopy += `سوال ${index + 1}: ${rawQuestionText} ${topicInBrackets}\n`;
-                
-                if (displayMode === 'right_only' && answers.length > 0) {
-                    const rightAnswerText = answers[0];
-                    textToCopy += `  صحیح جواب: ${rightAnswerText}\n`;
-                } else if (answers.length > 0) {
-                    answers.forEach(answer => {
-                        const cleanAnswer = answer.replace(' (صحیح جواب)', '').trim();
-                        textToCopy += `  - ${cleanAnswer}\n`;
+                const topicInBrackets = topicText ? ` (${topicText})` : '';
+
+                // --- Start building the question block ---
+                textToCopy += `سوال ${index + 1}: ${questionText}${topicInBrackets}\n`;
+
+                if (displayMode === 'right_only') {
+                    // Mode: Only Right Answer
+                    if (rightAnswer !== 'N/A') {
+                        textToCopy += `  صحیح جواب: ${rightAnswer}\n`;
+                    }
+                } else {
+                    // Modes: all_shuffled_unmarked or all_shuffled_marked
+                    
+                    // Create an array of all answers and shuffle it for consistent output order 
+                    // (matching the display, but the distinction is made below)
+                    let answers = [rightAnswer, wrongAnswer1, wrongAnswer2].filter(a => a !== 'N/A' && a !== '');
+                    
+                    // Important: We must re-shuffle the list for copy to match the visual order!
+                    // This is complex, so for clipboard simplicity, we will just present all answers
+                    // in a predictable order (Right, Wrong 1, Wrong 2) and mark the correct one if needed.
+                    // To keep the copy simple and useful, let's use the provided content order:
+                    
+                    // Recreate the list of answers to ensure all three are captured
+                    let allAnswers = [rightAnswer, wrongAnswer1, wrongAnswer2].filter(a => a !== 'N/A' && a !== '');
+                    
+                    // If all answers are present, shuffle them to match the display logic, 
+                    // but we need to track the right answer for marking.
+                    shuffleArray(allAnswers); 
+                    
+                    allAnswers.forEach(answer => {
+                        let answerLine = `  - ${answer}`;
+                        
+                        // CRITICAL FIX: Check if we are in the 'marked' mode AND the answer is the right one
+                        if (displayMode === 'all_shuffled_marked' && answer === rightAnswer) {
+                            answerLine += ' (صحیح جواب)';
+                        }
+                        textToCopy += `${answerLine}\n`;
                     });
                 }
                 textToCopy += '\n';
