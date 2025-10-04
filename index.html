@@ -90,14 +90,12 @@
         }
 
         /* --- STYLES FOR IMAGE GENERATION (Only applied when generating the image) --- */
-        /* This class is added to the results section before taking the screenshot */
         .image-export-mode {
             background-color: #ffffff !important; /* Force white background for image */
             box-shadow: none !important; /* Remove shadows */
             border: none !important; /* Remove border */
             padding: 2.5rem; /* Maintain padding for the look */
         }
-        /* Style for the temporary wrapper */
         #imageExportWrapper {
             background-color: #ffffff;
             padding: 2rem;
@@ -106,11 +104,11 @@
             width: 100%;
             margin: 0 auto;
         }
-        /* Style the Logo for the export image */
         .export-logo-style {
              margin-bottom: 2rem;
              display: flex;
-             justify-content: center;
+             flex-direction: column;
+             align-items: center;
         }
     </style>
 </head>
@@ -153,6 +151,7 @@
                 <div>
                     <!-- Questions Count -->
                     <div>
+                        <!-- The maxQuestionsCountSpan will now be updated based on BOTH filters -->
                         <label for="numQuestions" class="block text-sm font-medium text-gray-700 mb-2">سوالات کی تعداد (زیادہ سے زیادہ: <span id="maxQuestionsCount">0</span>):</label>
                         <input type="number" id="numQuestions" min="1" value="5" class="mt-1 block w-full pl-3 pr-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm">
                     </div>
@@ -171,17 +170,14 @@
             
             <!-- DIFFICULTY FILTER SECTION -->
             <div class="md:col-span-2 mt-4 p-4 border border-indigo-200 rounded-md bg-white">
-                <label class="block text-sm font-medium text-gray-700 mb-2">مشکل کی سطح کے لحاظ سے فلٹر کریں:</label>
-                <div class="flex space-x-3 items-center" dir="ltr"> <!-- Use LTR for operators -->
-                    <select id="difficultyOperator" class="py-2 pl-3 pr-8 text-base border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 rounded-md shadow-sm">
-                        <option value=">=">سے زیادہ یا برابر (>=)</option>
-                        <option value="<=">سے کم یا برابر (<=)</option>
-                        <option value="=" selected>بالکل برابر (=)</option>
-                    </select>
-                    <!-- Default value changed to 5 as requested -->
-                    <input type="number" id="difficultyValue" min="1" max="10" value="5" placeholder="Value (e.g., 5)" class="py-2 pl-3 pr-3 text-base border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm flex-grow">
-                </div>
-                <p class="text-xs text-gray-500 mt-1" id="difficultyRange" dir="rtl">کم از کم: 0، زیادہ سے زیادہ: 0 (شیٹ ڈیٹا پر مبنی)</p>
+                <label for="difficultyLevel" class="block text-sm font-medium text-gray-700 mb-2">مشکل کی سطح کے لحاظ سے فلٹر کریں:</label>
+                <select id="difficultyLevel" class="py-2 pl-3 pr-8 text-base border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 rounded-md shadow-sm w-full">
+                    <!-- Value stores the range: MIN-MAX -->
+                    <option value="0-3">آسان</option>
+                    <option value="4-6" selected>نارمل</option>
+                    <option value="7-8">مشکل</option>
+                    <option value="9-10">انتہائی مشکل</option>
+                </select>
             </div>
             
             <button id="generateQuizBtn" class="w-full bg-green-700 hover:bg-green-800 text-white font-bold py-2 px-4 rounded-md shadow-lg transition duration-300 ease-in-out transform hover:-translate-y-1 mt-6">
@@ -211,7 +207,6 @@
     <script>
         // --- Configuration: Google Sheet URL and Proxy ---
         const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT7RuRh0GMvBmq5VykMqhWjGfNqb38zqoMiCHF8UWUSVirk2cInp4AZMN3eOwjyLgCCv6nKsUg-tkts/pub?output=csv';
-        // NEW CORS Proxy URL (hopefully more reliable)
         const CORS_PROXY_URL = 'https://corsproxy.io/?'; 
         
         // --- Configuration: Column Indexes (0-based) ---
@@ -237,19 +232,17 @@
         const errorMessage = document.getElementById('errorMessage');
         const resultsSection = document.getElementById('resultsSection');
         const copyToClipboardBtn = document.getElementById('copyToClipboardBtn');
-        const downloadPdfBtn = document.getElementById('downloadPdfBtn'); // NEW BUTTON
+        const downloadPdfBtn = document.getElementById('downloadPdfBtn');
         const maxQuestionsCountSpan = document.getElementById('maxQuestionsCount');
         const answerDisplayModeSelect = document.getElementById('answerDisplayMode');
-        const difficultyOperator = document.getElementById('difficultyOperator');
-        const difficultyValueInput = document.getElementById('difficultyValue');
-        const difficultyRangeSpan = document.getElementById('difficultyRange');
+        
+        // UPDATED DIFFICULTY ELEMENTS
+        const difficultyLevelSelect = document.getElementById('difficultyLevel'); 
+        
         const alBurhanLogo = document.getElementById('alBurhanLogo');
         
-
         let sheetData = []; 
-        let minDifficulty = 0;
-        let maxDifficulty = 0;
-
+        
         // Function to fetch and parse CSV data using a CORS proxy
         async function fetchSheetData() {
             loadingMessage.classList.remove('hidden');
@@ -257,11 +250,9 @@
             criticalErrorDiv.classList.add('hidden');
             generateQuizBtn.disabled = true;
 
-            // Use the NEW CORS proxy URL to wrap the original Google Sheet URL
             const finalFetchUrl = CORS_PROXY_URL + encodeURIComponent(GOOGLE_SHEET_CSV_URL);
 
             try {
-                // Fetch using the proxy
                 const response = await fetch(finalFetchUrl);
                 
                 if (!response.ok) {
@@ -283,6 +274,7 @@
                 }
                 
                 populateTopics(sheetData);
+                // Initial update after data is loaded
                 updateMaxQuestionsLimit();
                 
             } catch (error) {
@@ -315,35 +307,6 @@
             return data;
         }
         
-        // Calculate min/max difficulty from the sheet data and update the UI
-        function updateDifficultyRange(data) {
-            const difficulties = data
-                .map(row => parseInt(row[COL_INDEX.DIFFICULTY], 10))
-                .filter(n => !isNaN(n));
-
-            if (difficulties.length > 0) {
-                minDifficulty = Math.min(...difficulties);
-                maxDifficulty = Math.max(...difficulties);
-            } else {
-                minDifficulty = 1;
-                maxDifficulty = 10;
-            }
-
-            difficultyRangeSpan.textContent = `کم از کم: ${minDifficulty}، زیادہ سے زیادہ: ${maxDifficulty} (شیٹ ڈیٹا پر مبنی)`;
-            difficultyValueInput.min = minDifficulty;
-            difficultyValueInput.max = maxDifficulty;
-            
-            const currentDiffValue = parseInt(difficultyValueInput.value, 10);
-            if (currentDiffValue < minDifficulty || isNaN(currentDiffValue)) {
-                difficultyValueInput.value = minDifficulty;
-            } else if (currentDiffValue > maxDifficulty) {
-                difficultyValueInput.value = maxDifficulty;
-            }
-            
-            difficultyOperator.addEventListener('change', updateMaxQuestionsLimit);
-            difficultyValueInput.addEventListener('input', updateMaxQuestionsLimit);
-        }
-
         // Populate the topic checkboxes
         function populateTopics(data) {
             topicCheckboxesContainer.innerHTML = ''; 
@@ -396,60 +359,73 @@
                 topicCheckboxesContainer.appendChild(checkboxDiv);
             });
 
-            updateDifficultyRange(data);
-
+            // Attach listeners to trigger update when topics or difficulty changes
+            // CRITICAL UPDATE: Listeners are added here to ensure count updates on filter change.
             topicCheckboxesContainer.addEventListener('change', updateMaxQuestionsLimit);
+            difficultyLevelSelect.addEventListener('change', updateMaxQuestionsLimit); 
+            
             generateQuizBtn.disabled = false;
         }
 
-        // Helper function to apply all current filters
+        /**
+         * Filters the sheet data based on currently selected topics AND difficulty level.
+         * This function is the single source of truth for available questions.
+         */
         function getFilteredQuestions() {
+            // 1. Get Topic Filters (using Serial #)
             const selectedTopicCheckboxes = document.querySelectorAll('#topicCheckboxes input[name="topic"]:checked');
             const selectedTopics = Array.from(selectedTopicCheckboxes).map(checkbox => checkbox.value);
 
+            // If no topics selected, return empty array immediately
             if (selectedTopics.length === 0) {
                  return [];
             }
 
-            const operator = difficultyOperator.value;
-            const targetDifficulty = parseInt(difficultyValueInput.value, 10);
+            // 2. Get Difficulty Filters
+            const difficultyRange = difficultyLevelSelect.value.split('-'); 
+            const minDifficulty = parseInt(difficultyRange[0] || 0, 10);
+            const maxDifficulty = parseInt(difficultyRange[1] || 10, 10);
 
+
+            // Filter logic
             const filtered = sheetData.filter(row => {
+                // Topic Filter: Check if the question's Serial # (Index 0) is one of the selected topics
                 const serial = String(row[COL_INDEX.SERIAL]).trim();
                 const topicMatch = selectedTopics.includes(serial); 
                 if (!topicMatch) return false;
 
+                // Difficulty Filter: Check against Difficulty Level (Index 6)
+                // Use default 0 if the difficulty column is empty or invalid
                 const questionDifficulty = parseInt(row[COL_INDEX.DIFFICULTY] || 0, 10);
-                if (isNaN(questionDifficulty)) return false;
-
-                switch (operator) {
-                    case '>=':
-                        return questionDifficulty >= targetDifficulty;
-                    case '<=':
-                        return questionDifficulty <= targetDifficulty;
-                    case '=':
-                        return questionDifficulty === targetDifficulty;
-                    default:
-                        return true;
-                }
+                
+                // Only keep questions where difficulty is within the selected range (inclusive)
+                const difficultyMatch = (questionDifficulty >= minDifficulty && questionDifficulty <= maxDifficulty);
+                
+                return difficultyMatch;
             });
 
             return filtered;
         }
 
 
-        // Function to update the max attribute of the number of questions input
+        /**
+         * Updates the max question count based on the intersection of selected topics and difficulty.
+         */
         function updateMaxQuestionsLimit() {
-            const filteredQuestions = getFilteredQuestions();
+            // CRITICAL FIX: The function now calls getFilteredQuestions(), which applies BOTH filters
+            const filteredQuestions = getFilteredQuestions(); 
             const totalAvailableQuestions = filteredQuestions.length;
 
             numQuestionsInput.max = totalAvailableQuestions;
             maxQuestionsCountSpan.textContent = totalAvailableQuestions;
 
             const currentValue = parseInt(numQuestionsInput.value, 10);
+            
+            // Adjust current input value if it exceeds the new maximum or is less than 1
             if (currentValue > totalAvailableQuestions || currentValue < 1) {
                 numQuestionsInput.value = totalAvailableQuestions > 0 ? 1 : 0;
             }
+            
             if (totalAvailableQuestions === 0) {
                 numQuestionsInput.value = 0;
                 generateQuizBtn.disabled = true;
@@ -554,7 +530,7 @@
             resultsSection.classList.remove('hidden');
         }
 
-        // NEW FUNCTION: Download Quiz as PNG Image
+        // Download Quiz as PNG Image
         function downloadQuizAsImage() {
             if (typeof html2canvas === 'undefined') {
                 errorMessage.textContent = 'تصویر تیار کرنے کے لیے html2canvas لائبریری دستیاب نہیں ہے۔';
@@ -566,30 +542,24 @@
             downloadPdfBtn.disabled = true;
             errorMessage.classList.add('hidden');
 
-            // 1. Create a temporary, clean container for the image capture
             const imageContainer = document.createElement('div');
             imageContainer.id = 'imageExportWrapper';
-            // Important: Use a large, fixed width for high-quality export
             imageContainer.style.width = '800px'; 
             imageContainer.style.position = 'absolute';
-            imageContainer.style.left = '-9999px'; // Move it off-screen
+            imageContainer.style.left = '-9999px'; 
 
-            // 2. Clone the content of the results section
             const clonedResults = resultsSection.cloneNode(true);
-
-            // 3. Prepare the clone for export (remove buttons, apply export styles)
             clonedResults.classList.add('image-export-mode');
-            clonedResults.querySelector('.flex')?.remove(); // Remove buttons from clone
+            clonedResults.querySelector('.flex')?.remove(); 
             
-            // 4. Add header/logo to the cloned content for the image
             const exportHeader = document.createElement('div');
             exportHeader.className = 'export-logo-style text-center mb-6';
             
             const headerLogo = alBurhanLogo.cloneNode(true);
-            headerLogo.classList.remove('shadow-lg'); // Remove shadow for clean export
+            headerLogo.classList.remove('shadow-lg');
             headerLogo.classList.remove('h-24');
             headerLogo.classList.add('h-16', 'w-auto');
-            headerLogo.removeAttribute('onerror'); // Remove error handler from clone
+            headerLogo.removeAttribute('onerror');
 
             const headerTitle = document.createElement('h1');
             headerTitle.className = 'text-3xl font-extrabold text-gray-900 mt-2';
@@ -598,20 +568,17 @@
             exportHeader.appendChild(headerLogo);
             exportHeader.appendChild(headerTitle);
 
-            // Append the header and the results content to the off-screen wrapper
             imageContainer.appendChild(exportHeader);
             imageContainer.appendChild(clonedResults);
             
-            // 5. Add wrapper to body and take screenshot
             document.body.appendChild(imageContainer);
 
             html2canvas(imageContainer, {
-                scale: 2, // Use higher scale for better resolution
+                scale: 2, 
                 logging: false,
                 useCORS: true,
                 allowTaint: true
             }).then(canvas => {
-                // 6. Convert canvas to PNG and trigger download
                 const imageURL = canvas.toDataURL('image/png');
                 const filename = `AlBurhan_Quiz_${new Date().toISOString().slice(0, 10)}.png`;
 
@@ -622,7 +589,6 @@
                 link.click();
                 document.body.removeChild(link);
 
-                // 7. Restore button state
                 downloadPdfBtn.textContent = 'سوالنامے کو تصویر (PNG) میں ڈاؤن لوڈ کریں';
                 downloadPdfBtn.disabled = false;
             }).catch(error => {
@@ -632,7 +598,6 @@
                 errorMessage.textContent = 'تصویر تیار کرنے میں کوئی مسئلہ پیش آیا۔ کنسول میں تفصیلات دیکھیں۔';
                 errorMessage.classList.remove('hidden');
             }).finally(() => {
-                // CRITICAL: Remove the temporary container
                 if (document.body.contains(imageContainer)) {
                     document.body.removeChild(imageContainer);
                 }
@@ -657,21 +622,17 @@
                      rawQuestionText = rawQuestionText.replace(topicInBrackets, '').trim(); 
                 }
 
-                // Get all answer texts from the list items
                 const answers = Array.from(card.querySelectorAll('li span')).map(span => {
                     return span.textContent;
                 });
 
                 textToCopy += `سوال ${index + 1}: ${rawQuestionText} ${topicInBrackets}\n`;
                 
-                // Determine how to format the answers for clipboard
                 if (displayMode === 'right_only' && answers.length > 0) {
                     const rightAnswerText = answers[0];
                     textToCopy += `  صحیح جواب: ${rightAnswerText}\n`;
                 } else if (answers.length > 0) {
-                    // This covers both marked and unmarked shuffled modes
                     answers.forEach(answer => {
-                        // Check if the answer includes the correct answer label and remove it for clean text copy
                         const cleanAnswer = answer.replace(' (صحیح جواب)', '').trim();
                         textToCopy += `  - ${cleanAnswer}\n`;
                     });
@@ -679,7 +640,6 @@
                 textToCopy += '\n';
             });
 
-            // Use document.execCommand for better compatibility in iframes
             const textarea = document.createElement('textarea');
             textarea.value = textToCopy;
             textarea.style.position = 'fixed';
@@ -709,7 +669,7 @@
         // Event Listeners
         generateQuizBtn.addEventListener('click', generateQuiz);
         copyToClipboardBtn.addEventListener('click', copyQuestionsToClipboard);
-        downloadPdfBtn.addEventListener('click', downloadQuizAsImage); // Attach the new image function
+        downloadPdfBtn.addEventListener('click', downloadQuizAsImage); 
         
         // Initial data fetch on page load
         window.onload = fetchSheetData;
