@@ -154,6 +154,17 @@
                 <!-- Column 1: Topic Checkboxes -->
                 <div class="sm:col-span-1 flex flex-col">
                     <label class="block text-sm font-medium text-gray-700 mb-2">موضوعات منتخب کریں:</label>
+                    
+                    <!-- NEW: Check All/Uncheck All Buttons -->
+                    <div class="flex gap-2 mb-2">
+                        <button id="checkAllTopicsBtn" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white text-sm font-bold py-1 px-2 rounded-md transition duration-150">
+                            سب کو منتخب کریں
+                        </button>
+                        <button id="uncheckAllTopicsBtn" class="flex-1 bg-red-500 hover:bg-red-600 text-white text-sm font-bold py-1 px-2 rounded-md transition duration-150">
+                            سب کو غیر منتخب کریں
+                        </button>
+                    </div>
+
                     <div id="topicCheckboxes" class="checkbox-container flex-grow">
                         <!-- Checkboxes will be dynamically inserted here -->
                         <p class="text-gray-500">موضوعات لوڈ ہو رہے ہیں...</p>
@@ -163,11 +174,10 @@
                 <!-- Column 2: Other Filters (Difficulty, Answer Mode, Count) -->
                 <div class="sm:col-span-1 flex flex-col gap-6">
                     
-                    <!-- 1. Difficulty Filter (TOP) - NOW MATCHES Filter Control Box UI -->
+                    <!-- 1. Difficulty Filter -->
                     <div class="filter-control-box">
                         <label for="difficultyLevel" class="block text-sm font-medium text-gray-700 mb-2">مشکل کی سطح کے لحاظ سے فلٹر کریں:</label>
                         <select id="difficultyLevel" class="py-2 pl-3 pr-8 text-base border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 rounded-md shadow-sm w-full">
-                            <!-- Brackets and counts removed for cleaner UI -->
                             <option value="0-3">آسان</option>
                             <option value="4-6" selected>نارمل</option>
                             <option value="7-8">مشکل</option>
@@ -175,7 +185,7 @@
                         </select>
                     </div>
 
-                    <!-- 2. Answer Display Mode (MIDDLE) - NOW MATCHES Filter Control Box UI -->
+                    <!-- 2. Answer Display Mode -->
                     <div class="filter-control-box"> 
                         <label for="answerDisplayMode" class="block text-sm font-medium text-gray-700 mb-2">جواب دکھانے کا طریقہ:</label>
                         <select id="answerDisplayMode" class="block w-full py-2 pl-3 pr-8 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md shadow-sm">
@@ -185,7 +195,7 @@
                         </select>
                     </div>
                     
-                    <!-- 3. Questions Count (BOTTOM) - NOW MATCHES Filter Control Box UI -->
+                    <!-- 3. Questions Count -->
                     <div class="filter-control-box">
                         <label for="numQuestions" class="block text-sm font-medium text-gray-700 mb-2">
                             سوالات کی تعداد:
@@ -263,6 +273,10 @@
         const difficultyLevelSelect = document.getElementById('difficultyLevel'); 
         const resetFiltersBtn = document.getElementById('resetFiltersBtn'); 
         
+        // NEW: Topic Selection Control Buttons
+        const checkAllTopicsBtn = document.getElementById('checkAllTopicsBtn');
+        const uncheckAllTopicsBtn = document.getElementById('uncheckAllTopicsBtn');
+        
         const alBurhanLogo = document.getElementById('alBurhanLogo');
         
         let sheetData = []; 
@@ -274,6 +288,8 @@
             criticalErrorDiv.classList.add('hidden');
             generateQuizBtn.disabled = true;
             resetFiltersBtn.disabled = true;
+            checkAllTopicsBtn.disabled = true; // Disable until data is ready
+            uncheckAllTopicsBtn.disabled = true; // Disable until data is ready
 
             const finalFetchUrl = CORS_PROXY_URL + encodeURIComponent(GOOGLE_SHEET_CSV_URL);
 
@@ -310,12 +326,16 @@
                 topicCheckboxesContainer.innerHTML = '<p class="text-red-600">موضوعات لوڈ کرنے میں خرابی۔ اوپر موجود ایرر میسیج دیکھیں۔</p>';
                 generateQuizBtn.disabled = true;
                 resetFiltersBtn.disabled = true;
+                checkAllTopicsBtn.disabled = true; 
+                uncheckAllTopicsBtn.disabled = true; 
 
             } finally {
                  loadingMessage.classList.add('hidden');
                  if (sheetData.length > 0) {
                      generateQuizBtn.disabled = false;
                      resetFiltersBtn.disabled = false;
+                     checkAllTopicsBtn.disabled = false; // Enable controls
+                     uncheckAllTopicsBtn.disabled = false; // Enable controls
                  }
             }
         }
@@ -397,6 +417,20 @@
         }
 
         /**
+         * Function to set the checked state of all topic checkboxes.
+         * @param {boolean} checkedState - true to check all, false to uncheck all.
+         */
+        function setAllTopicsChecked(checkedState) {
+            const allCheckboxes = document.querySelectorAll('#topicCheckboxes input[name="topic"]');
+            allCheckboxes.forEach(checkbox => {
+                checkbox.checked = checkedState;
+            });
+            // CRITICAL: Manually trigger the update after changing state programmatically
+            updateMaxQuestionsLimit();
+        }
+
+
+        /**
          * Filters the sheet data based on currently selected topics AND difficulty level.
          * This function is the single source of truth for available questions.
          */
@@ -463,14 +497,11 @@
         }
 
         /**
-         * NEW FUNCTION: Resets all filters and UI state to default.
+         * Resets all filters and UI state to default.
          */
         function resetFilters() {
             // 1. Uncheck all topic checkboxes
-            const allCheckboxes = document.querySelectorAll('#topicCheckboxes input[name="topic"]');
-            allCheckboxes.forEach(checkbox => {
-                checkbox.checked = false;
-            });
+            setAllTopicsChecked(false); 
 
             // 2. Reset Difficulty Level to default (Normal: 4-6)
             difficultyLevelSelect.value = '4-6';
@@ -727,6 +758,10 @@
         copyToClipboardBtn.addEventListener('click', copyQuestionsToClipboard);
         downloadPdfBtn.addEventListener('click', downloadQuizAsImage); 
         resetFiltersBtn.addEventListener('click', resetFilters); 
+        
+        // NEW EVENT LISTENERS for Topic Selection
+        checkAllTopicsBtn.addEventListener('click', () => setAllTopicsChecked(true));
+        uncheckAllTopicsBtn.addEventListener('click', () => setAllTopicsChecked(false));
         
         // Initial data fetch on page load
         window.onload = fetchSheetData;
