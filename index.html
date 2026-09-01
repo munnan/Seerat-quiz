@@ -342,7 +342,8 @@
             checkAllTopicsBtn.disabled = true; // Disable until data is ready
             uncheckAllTopicsBtn.disabled = true; // Disable until data is ready
 
-            const finalFetchUrl = CORS_PROXY_URL + encodeURIComponent(GOOGLE_SHEET_CSV_URL);
+           // const finalFetchUrl = CORS_PROXY_URL + encodeURIComponent(GOOGLE_SHEET_CSV_URL);
+            const finalFetchUrl = GOOGLE_SHEET_CSV_URL;
 
             try {
                 const response = await fetch(finalFetchUrl);
